@@ -1,0 +1,235 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// Chinese (P.R.C.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CHS)
+#ifdef _WIN32
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
+#pragma code_page(936)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_MIR2                ICON                    ".\\Res\\MIR2.ICO"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDB_TOOLBAR             BITMAP                  ".\\Res\\toolbar.bmp"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_CONFIGDLG DIALOG  0, 0, 151, 123
+STYLE DS_SETFONT | DS_MODALFRAME | DS_3DLOOK | WS_POPUP | WS_VISIBLE | 
+    WS_CAPTION | WS_SYSMENU
+CAPTION "Login Server Configuration"
+FONT 9, "??"
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,38,17,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,79,75,50,14
+END
+
+IDD_CONFIGDLG_SERVERLIST DIALOGEX 0, 0, 271, 159
+STYLE DS_SETFONT | DS_3DLOOK | WS_CHILD | WS_VISIBLE | WS_CAPTION
+CAPTION "Server List"
+FONT 9, "??", 0, 0, 0x1
+BEGIN
+    CONTROL         "List1",IDC_SERVERINFO_LIST,"SysListView32",LVS_REPORT | 
+                    LVS_EDITLABELS | WS_BORDER | WS_TABSTOP,7,7,257,115,
+                    WS_EX_CLIENTEDGE
+    PUSHBUTTON      "&Add",IDC_SVRLIST_ADD,7,138,50,14
+    PUSHBUTTON      "&Remove",IDC_SVRLIST_REMOVE,214,138,50,14
+    PUSHBUTTON      "&Edit",IDC_SVRLIST_EDIT,107,138,50,14
+END
+
+IDD_SVRLIST_ADD DIALOG  0, 0, 239, 161
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Add/Edit Gate Server"
+FONT 9, "??"
+BEGIN
+    EDITTEXT        IDC_TITLE,64,24,60,14,ES_AUTOHSCROLL
+    CONTROL         "IPAddress1",IDC_IPADDRESS1,"SysIPAddress32",WS_TABSTOP,
+                    64,44,100,15
+    CONTROL         "IPAddress2",IDC_IPADDRESS2,"SysIPAddress32",WS_TABSTOP,
+                    64,66,100,15
+    CONTROL         "IPAddress3",IDC_IPADDRESS3,"SysIPAddress32",WS_TABSTOP,
+                    64,88,100,15
+    DEFPUSHBUTTON   "&Add/Modify",IDOK,107,140,56,14
+    PUSHBUTTON      "Cancel",IDCANCEL,176,140,56,14
+    LTEXT           "Title :",IDC_STATIC,40,27,19,8
+    CTEXT           "IP Address : \n(Private)",IDC_STATIC,17,45,44,16
+    CTEXT           "IP Address :\n(Public)",IDC_STATIC,17,67,44,16
+    CTEXT           "IP Address :",IDC_STATIC,17,92,44,10
+    EDITTEXT        IDC_PORT,64,109,27,14,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Port :",IDC_STATIC,41,111,18,8
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO 
+BEGIN
+    IDD_CONFIGDLG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 144
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 116
+    END
+
+    IDD_CONFIGDLG_SERVERLIST, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 264
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 152
+    END
+
+    IDD_SVRLIST_ADD, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 232
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 154
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE 
+BEGIN
+    IDS_NOTWINNT            "这个程序只有Windows 2000以上的版本上运行"
+    IDS_LVS_LABEL1          "日期"
+    IDS_LVS_LABEL2          "时间"
+    IDS_LVS_LABEL3          "信息"
+    IDS_STARTSERVICE        "登录服务器开始服务。"
+    IDS_STOPSERVICE         "登录服务器停止服务。"
+    IDS_CONNECT_LOGINSERVER "登录服务器连接。"
+    IDS_DISCONNECT_LOGINSERVER "登录服务器断开连接断了。"
+    IDS_PROGRAM_QUIT        "是否关闭登录服务器？"
+    IDS_PROGRAM_TITLE       "传奇2 -登录服务器"
+    IDS_CANT_CONNECT        "登录服务器无法连接。10秒后尝试重新连接。"
+    IDS_CONFLVS_LABEL1      "服务器名"
+    IDS_CONFLVS_LABEL2      "标题"
+    IDS_CONFLVS_LABEL3      "登录的内部IP地址"
+    IDS_CONFLVS_LABEL4      "登录的外部IP地址"
+END
+
+STRINGTABLE 
+BEGIN
+    IDS_CONFLVS_LABEL5      "游戏的外部IP地址"
+    IDS_TAB_LABEL1          "服务器配置"
+    IDS_ACCEPT_GATESERVER   "登录网关服务器（% s）连接。"
+    IDS_OPEN_USER           "客户端（% s）连接尝试。"
+    IDS_CLOSE_USER          "客户端（% s）连接关闭。"
+    IDS_CONNECTDB           "传奇2数据库连接。"
+    IDS_LOADACCOUNTRECORDS  "用户帐户信息记录的。"
+    IDS_BOUNDACCOUNTRECORDS "%d个用户帐户信息记录读出。"
+    IDS_COMPLETENEWUSER     "用户ID创建[ % s ]。"
+END
+
+#endif    // Chinese (P.R.C.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
+// Korean resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_KOR)
+#ifdef _WIN32
+LANGUAGE LANG_KOREAN, SUBLANG_DEFAULT
+#pragma code_page(949)
+#endif //_WIN32
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MAINMENU MENU 
+BEGIN
+    POPUP "&Service"
+    BEGIN
+        MENUITEM "&Start Service",              IDM_STARTSERVICE
+        MENUITEM "S&top Service",               IDM_STOPSERVICE, GRAYED
+        MENUITEM SEPARATOR
+        MENUITEM "&Configuration",              IDM_CONFIG
+        MENUITEM "&Game Server Connection Status", IDM_SERVERSTAT
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                       IDM_EXIT
+    END
+END
+
+#endif    // Korean resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

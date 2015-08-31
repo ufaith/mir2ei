@@ -1,0 +1,70 @@
+登录处理事件：
+0．WinMain主函数调用g_xLoginProc.Load();加载图片等初始化，设置g_bProcState 的状态。
+1．CLoginProcess::OnKeyDown-> m_xLogin.OnKeyDown->g_xClientSocket.OnLogin;
+WSAAsyncSelect模型ID_SOCKCLIENT_EVENT_MSG,因此，(登录，角色选择，游戏逻辑处理)都回调g_xClientSocket.OnSocketMessage(wParam, lParam)进行处理。
+OnSocketMessage函数中：FD_READ事件中：
+2．g_bProcState判断当前状态，_GAME_PROC时，把GameGate的发送过来的消息压入PacketQ队列中，再进行处理。否则则调用OnMessageReceive（虚方法，根据g_bProcState状态，调用CloginProcess或者是CcharacterProcess的OnMessageReceive方法）。
+3．CloginProcess：调用OnSocketMessageRecieve处理返回情况。如果服务器验证失败(SM_ID_NOTFOUND, SM_PASSWD_FAIL)消息，否则收到SM_PASSOK_SELECTSERVER消息（SelGate服务器列表消息）。m_Progress = PRG_SERVER_SELE;进行下一步选择SelGate服务器操作。
+4． m_xSelectSrv.OnButtonDown->CselectSrv. OnButtonUp->
+g_xClientSocket.OnSelectServer(CM_SELECTSERVER)，得到真正的IP地址。调用OnSocketMessageRecieve处理返回的SM_SELECTSERVER_OK消息。并且断开与loginSrv服务器连接。 g_xClientSocket.DisconnectToServer();设置状态为PRG_TO_SELECT_CHR状态。
+ 
+角色选择处理：
+1． WinMain消息循环处理：g_xLoginProc.RenderScene(dwDelay)-> RenderScroll-> 
+SetNextProc调用
+g_xClientSocket.m_pxDefProc = g_xMainWnd.m_pxDefProcess = &g_xChrSelProc;
+g_xChrSelProc.Load(); 
+g_bProcState = _CHAR_SEL_PROC;
+ 
+   2．g_xChrSelProc.Load();连接SelGate服务器（从LoginGate服务器得到IP地址）。
+g_xClientSocket.OnQueryChar();查询用户角色信息，发送消息：CM_QUERYCHR，设置状态为_CHAR_SEL_PROC, m_Progress = PRG_CHAR_SELE; 在OnSocketMessageRecieve函数中接收到SelGate服务器发送的消息。
+ 
+   3．点击ChrStart按钮：g_xChrSelProc.OnLButtonDown-> CSelectChr::OnButtonUp->
+g_xClientSocket.OnSelChar->发送CM_SELCHR消息到SelGate服务器。 
+ 
+4．CClientSocket::OnSocketMessage->CCharacterProcess::OnMessageReceive
+(SM_STARTPLAY) 接受到SelGate服务器发送的GameGate服务器IP地址，并断开与SelGate服务器的连接。m_xSelectChr.m_nRenderState = 2;
+   
+   5. WinMain消息循环处理：g_xLoginProc.RenderScene ->
+m_xSelectChr.Render(nLoopTime);-> CSelectChr::Render(INT   nLoopTime)-> m_nRenderState = m_nRenderState + 10; 为12-> CCharacterProcess::RenderScene执行
+ 
+m_Progress = PRG_SEL_TO_GAME;
+    m_Progress = PRG_PLAY_GAME;                            
+SetNextProc();
+ 
+6．SetNextProc();执行： g_xGameProc.Load(); g_bProcState = _GAME_PROC;进行游戏状态。
+ 
+游戏逻辑处理:
+1．客户端处理：
+ CGameProcess::Load() 初始化游戏环境，加载地图等操作，调用ConnectToServer（m_pxDefProc->OnConnectToServer）连接到GameGate游戏网关服务器（DBSrv处理后经SelGate服务器返回的GameGate服务器IP地址）。
+     CClientSocket->ConnectToServer调用connect时，由GameGate服务器发送GM_OPEN消息到GameSrv服务器。WSAAsyncSelect I/O模型回调函数 g_xClientSocket.OnSocketMessage。然后由m_pxDefProc->OnConnectToServer()调用CGameProcess::OnConnectToServer()函数，调用：g_xClientSocket.SendRunLogin。
+ 
+2. GameGate服务器ServerWorkerThread处理：
+GameGate服务器ServerWorkerThread收到消息，ThreadFuncForMsg处理数据，生成MsgHdr结构，并设置
+MsgHdr.nCode    = 0xAA55AA55; //数据标志
+ MsgHdr.wIdent   = GM_DATA;    //数据类型
+ 
+3. GameSrv服务器ServerWorkerThread线程处理
+   GameSrv服务器ServerWorkerThread线程处理调用DoClientCertification设置用户信息，及USERMODE_LOGIN的状态。并且调用LoadPlayer(CUserInfo* pUserInfo)函数-> LoadHumanFromDB-> SendRDBSocket发送DB_LOADHUMANRCD请求，返回该玩家的所有数据信息。
+ 
+4. 客户端登录验证(GameSrv服务器的线程ProcessLogin处理）
+  用户的验证是由GameSrv服务器的线程ProcessLogin处理。g_xReadyUserInfoList2列表中搜索，判断用户是否已经登录，一旦登录就调用LoadPlayer(这里两个参数)：
+a. 设置玩家游戏状态。m_btCurrentMode状态为USERMODE_PLAYGAME
+b. 加载物品，个人设置，魔法等。
+c. pUserInfo->m_pxPlayerObject->Initialize();初始化用户信息，加载用户坐标，方向，地图。
+   Initialize执行流程：
+1)       AddProcess(this, RM_LOGON, 0, 0, 0, 0, NULL);加入登录消息。
+2)       m_pMap->AddNewObject 地图中单元格（玩家列表）加入该游戏玩家。OS_MOVINGOBJECT玩家状态。
+3)       AddRefMsg(RM_TURN 向周围玩家群发 RM_TURN消息。以玩家自己为中心，以24*24的区域里，向这个区域所属的块里的所有玩家列表发送消息)广播 AddProcess。
+4)       RecalcAbilitys 设置玩家的能力属性（攻击力（手，衣服），武器力量等）。
+5)       循环处理本游戏玩家的附属物品，把这些物品的力量加到（手，衣服等）的攻击力量里。
+6)       RM_CHARSTATUSCHANGED消息，通知玩家状态改变消息。
+7)       AddProcess(this, RM_ABILITY, 0, 0, 0, 0, NULL); 等级
+AddProcess(this, RM_SUBABILITY, 0, 0, 0, 0, NULL); 
+AddProcess(this, RM_DAYCHANGING, 0, 0, 0, 0, NULL); 校时
+AddProcess(this, RM_SENDUSEITEMS, 0, 0, 0, 0, NULL); 装备
+AddProcess(this, RM_SENDMYMAGIC, 0, 0, 0, 0, NULL); 魔法
+         SysMsg(szMsg, 1) 攻击力
+并把用户数据从g_xReadyUserInfoList2列表中删除。
+ 
+   说明：
+一旦通过验证，就从验证列表中该玩家，改变玩家状态，LoadPlayer加载用户资源（地图中加入用户信息，向用户24*24区域内的块内玩家发送上线消息GameSrv广播新玩家上线（坐标）的消息。向该新玩家发送玩家信息（等级，装备，魔法，攻击力等）。

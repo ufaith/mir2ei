@@ -1,0 +1,38 @@
+器执行流程：(玩家走动)
+    GameSrv服务器ProcessUserHuman线程处理玩家消息：
+遍历UserInfoList列表，依次调用每个UserInfo的Operate来处理命令队列中的所有操作; pUserInfo->Operate()调用m_pxPlayerObject->Operate()调用。
+判断玩家if (!m_fIsDead)，如果已死，则发送_MSG_FAIL消息。我们在前面看到过，该消息是被优先处理的。否则则调用WalkTo，并发送_MSG_GOOD消息给客户端。
+WalkTo函数的流程：
+1） WalkNextPos 根据随机值产生，八个方向的坐标位置。
+2） WalkXY怪物走动到一个坐标值中。
+CheckDoorEvent根据pMapCellInfo->m_sLightNEvent返回四种状态。
+a) 要移动的位置是一扇门 _DOOR_OPEN
+b) 不是一扇门 _DOOR_NOT
+c) 是一扇门不可以打开返回 _DOOR_MAPMOVE_BACK或_DOOR_MAPMOVE_FRONT玩家前/后移动
+3） 如果_DOOR_OPEN则发送SM_DOOROPEN消息给周围玩家。
+4） m_pMap->CanMove如果可以移动，则MoveToMovingObject从当前点移动到另一点。并发送AddRefMsg(RM_WALK)给周围玩家。
+    AddRefMsg函数，我们在后面的服务器代码里分析过：它会根据X，Y坐标，在以自己坐标为中心周围26*26区域里面，按地图单元格的划分，遍历所有单元格，再遍历所有单元格内的玩家列表，广播发送RM_WALK消息。
+ 
+客户端执行流程：(反馈服务器端本玩家走动)
+1. 服务器如果发送_MSG_FAIL 由客户端CGameProcess::OnProcPacketNotEncode处理。
+     m_xMyHero.SetOldPosition();
+人：  SetMotionFrame(_MT_STAND
+           AdjustMyPostion(); 重绘地图
+           m_bMotionLock = m_bInputLock = FALSE;
+     骑马：SetMotionFrame(_MT_HORSESTAND
+            AdjustMyPostion(); 重绘地图
+            m_bMotionLock = m_bInputLock = FALSE;
+   2. 服务器如果发送_MSG_GOOD, 由客户端CGameProcess::OnProcPacketNotEncode处理。m_xMyHero.m_bMotionLock = FALSE;
+ 
+其它客户端执行流程：(反馈服务器端其它玩家)
+ 1．其它玩家：
+     人： SetMotionFrame(_MT_WALK, bDir);
+     骑马：SetMotionFrame(_MT_HORSEWALK, bDir);
+     m_bMoveSpeed = _SPEED_WALK;
+     SetMoving(); 设置m_shShiftPixelX， m_shShiftPixelY坐标。
+ 2．NPC，怪物：
+SetMotionFrame(_MT_MON_WALK, bDir);
+     m_bMoveSpeed = _SPEED_WALK;
+     SetMoving(); 设置m_shShiftPixelX， m_shShiftPixelY坐标。
+CGameProcess::RenderObject->DrawActor(m_shShiftPixelX， m_shShiftPixelY)重绘发消息的玩家，NPC怪物位置。
+ 

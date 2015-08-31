@@ -1,0 +1,208 @@
+6. 接收怪物，商人，其它玩家的消息:
+ProcessUserHuman:(其它玩家—服务器处理)
+CPlayerObject->SearchViewRange();
+CPlayerObject->Operate();
+遍历UserInfoList列表，依次调用每个UserInfo的Operate来处理命令队列中的所有操作; pUserInfo->Operate()调用m_pxPlayerObject->Operate()调用。根据分发消息（RM_TURN）向客户端发送SM_TURN消息。GameSrv广播新玩家上线（坐标）的消息。向该新玩家发送玩家信息（等级，装备，魔法，攻击力等）。
+玩家，移动对象：
+1. 遍历m_xVisibleObjectList列表，所有(玩家，商人，怪物）发送调用AddProcess
+ (RM_TURN向周围玩家发送消息)。
+地图：
+2．遍历m_xVisibleItemList，发送AddProcess(this, RM_ITEMSHOW消息更新地图。
+3．遍历m_xVisibleEventList，发送AddProcess(this, RM_SHOWEVENT
+ 
+ProcessMonster线程：(怪物—服务器处理)
+GameSrv服务器在ProcessMonster线程：创建不同的CMonsterObject对象，并且加入xMonsterObjList列表和pMapCellInfo->m_xpObjectList列表中，然后再调用CMonsterObject::SearchViewRange()更新视线范围内目标，根据g_SearchTable计算出搜索坐标，转换为相应的地图单元格，遍历所有可移动生物，加入m_xVisibleObjectList列表，调用Operate；Operate遍历m_DelayProcessQ列表，过滤出RM_DOOPENHEALTH，RM_STRUCK和RM_MAGSTRUCK三个事件(恢复生命值，攻击，魔法攻击)，并处理。
+ProcessMerchants线程：(商人--服务器处理)
+       1). 遍历g_pMerchantInfo结构(根据nNumOfMurchantInfo数量)。得到商人类型相关的地图，创建商人对象，设置不同的编号，坐标，头像及所属地图。在该地图中加入该商人，且在g_xMerchantObjList商人清单中加入该商人。
+2). 遍历g_xMerchantObjList, SearchViewRange，对每个商人更新视线范围内目标
+a). 遍历m_xVisibleObjectList，设置每个pVisibleObject->nVisibleFlag = 0;设置状态（删除）。
+b). 搜索VisibleObjectList列表，(服务器启动时InitializingServer加载 searchTable.tbl)，根据坐标，找到相应的地图单元格。然后遍历pMapCellInfo->m_xpObjectList列表，判断如果为OS_MOVINGOBJECT标志，调用UpdateVisibleObject函数，该函数遍历 m_xVisibleObjectList列表，如果找到该商人对象，则pVisibleObject->nVisibleFlag = 1;否则判断pNewVisibleObject对象，设置nVisibleFlag为2，设置对象为该商人实体，然后加入m_xVisibleObjectList列表中。
+ 
+总结：循环列表，找出地图单元格中的所有玩家，把所有玩家(OS_MOVINGOBJECT)加入到m_xVisibleObjectList列表中。
+c). 遍历m_xVisibleObjectList列表,(pVisibleObject->nVisibleFlag == 0)则删除该pVisibleObject对象。
+d). RunRace调用AddRefMsg 向周围玩家发送SM_TURN和SM_HIT
+ 
+客户端收到消息后相应的处理：
+1．CGameProcess::OnSocketMessageRecieve加入m_xWaitPacketQueue队列
+      遍历m_xVisibleObjectList队列中所有移动物体(角色)：
+        RM_DISAPPEAR   消失(SM_DISAPPEAR)  ProcessDefaultPacket函数
+        RM_DEATH       死亡(SM_NOWDEATH, SM_DEATH)
+           CHero::OnDeath 其它玩家。
+           CActor::OnDeath 怪物。
+//g_xGameProc.m_xMagicList
+        RM_TURN        移动
+SM_TURN消息处理
+      遍历m_xVisibleItemList队列中所有移动物体(地图)：
+        RM_ITEMHIDE    从m_stMapItemList列表中删除该移动对象
+ RM_ITEMSHOW    遍历m_stMapItemList，如果不存在，则创建一个GROUNDITEM结构，并加入m_stMapItemList列表中。
+typedef struct tagGROUNDITEM
+{
+                     INT             nRecog;
+                     SHORT           shTileX;
+                     SHORT           shTileY;
+                     WORD            wLooks;
+                     CHAR            szItemName[40];
+}GROUNDITEM, *LPGROUNDITEM;
+      遍历m_xVisibleEventList队列中所有移动物体(事件)：
+        RM_HIDEEVENT   
+RM_SHOWEVENT   
+ 
+ 
+2. 部分数据未处理，加入m_xWaitPacketQueue队列中由ProcessPacket处理。
+CClientSocket::OnSocketMessage的FD_READ事件中，PacketQ.PushQ把接收到的消息，压入PacketQ队列中。处理PacketQ队列数据是由CGameProcess::Load()时调用OnTimer在CGameProcess::OnTimer中处理的，处理过程为： 
+OnTimer -> ProcessPacket -> ProcessPacket处理m_xWaitPacketQueue队列消息（OnSocketMessageRecieve函数中未处理的消息）。
+ 
+ProcessPacket 函数处理流程：
+1． 处理本玩家（SM_NOWDEATH, SM_DEATH, SM_CHANGEMAP, SM_STRUCK）
+a.如果接收到消息是SM_NOWDEATH或SM_DEATH 则加入m_xPriorPacketQueue队列。
+b. 如果接收到消息是SM_CHANGEMAP则调用LoadMapChanged,设置场景。
+c. SM_STRUCK 处理受攻击（本玩家，或者其它的玩家，NPC等）。
+ 
+2． 其它消息：m_xMyHero.StruckMsgReassign();
+                 m_xMyHero.m_xPacketQueue.PushQ((BYTE*)lpPacketMsg);
+判断服务器发送来的消息ID是否相同。m_xMyHero.m_dwIdentity在登录成功的时
+候由服务器发送的用户消息获取的。
+if ( lpPacketMsg->stDefMsg.nRecog == m_xMyHero.m_dwIdentity )
+如果是服务器端游戏玩家自己发送的消息，则处理自己的消息。否则如果是其它玩家(怪物)发送的消息，遍历m_xActorList列表, 判断该对象是否存在，如果该不存在，则根据stFeature.bGender的类型
+_GENDER_MAN： 创建一个CHero对象，加入到m_xActorList列表中。
+_GENDER_WOMAN：
+_GENDER_NPC： 创建一个CNPC对象，加入到m_xActorList列表中。
+_GENDER_MON： 创建一个CActor对象，加入到m_xActorList列表中。
+然后pxActor->m_xPacketQueue.PushQ 然后把消息压入该对象的xPacketQueue列表中。
+ 
+    总结：ProcessPacket处理 CClientSocket类接受的消息(m_xWaitPacketQueue)，判断是否是服务器发送给自己的消息，处理一些发送给自己的重要消息，其它消息处理则加入m_xMyHero.m_xPacketQueue队列中，然后再遍历m_xActorList队列，判断如果服务器端发来的消息里的玩家(NPC，怪物)，在m_xActorList队列中找不到，就判断一个加入m_xActorList列表中，并且把该消息压入pxActor->m_xPacketQueue交给该NPC去处理该事件。
+而xPacketQueue队列的消息分别由该对象的UpdatePacketState处理，如下：
+BOOL CActor::UpdatePacketState() ,BOOL CNPC::UpdatePacketState()
+ BOOL CHero::UpdatePacketState()。
+ 
+ProcessDefaultPacket函数：
+    处理CGameProcess::OnSocketMessageRecieve 中 SM_CLEAROBJECT消息：
+处理（SM_DISAPPEAR，SM_CLEAROBJECT）消息。
+   遍历m_xWaitDefaultPacketQueue消息列表
+SM_DISAPPEAR和SM_CLEAROBJECT：
+          遍历m_xActorList列表，清除pxActor->m_xPacketQueue队列内所有消息。
+m_xActorList.DeleteCurrentNodeEx();从对列中删除该对象。
+CHero* pxHero = (CHero*)pxActor; delete((CHero*)pxHero);销毁该玩家。
+ 
+ 
+游戏循环处理： CGameProcess::RenderScene(INT nLoopTime)函数：
+主要流程如下：
+   wMoveTime += nLoopTime; 判断wMoveTime>100时，bIsMoveTime置为真。
+ 
+ 1．m_xMyHero.UpdateMotionState(nLoopTime, bIsMoveTime);处理本玩家消息。
+     a. UpdatePacketState函数：
+           遍历m_xPriorPacketQueue队列，如果有SM_NOWDEATH或SM_DEATH消息，则优先处理。
+           处理m_xPacketQueue队列中消息。
+             SM_STRUCK:
+             SM_RUSH
+             SM_BACKSTEP
+             SM_FEATURECHANGED:
+             SM_OPENHEALTH:         
+SM_CLOSEHEALTH:        
+SM_CHANGELIGHT:        
+SM_USERNAME:           
+SM_CHANGENAMECOLOR:
+             SM_CHARSTATUSCHANGE:   
+SM_MAGICFIRE:          
+SM_HEALTHSPELLCHANGED: 
+ 
+ 2．CheckMappedData函数：遍历m_xActorList列表分别调用
+         CActor::UpdateMotionState(INT nLoopTime, BOOL bIsMoveTime)
+CNPC::UpdateMotionState(INT nLoopTime, BOOL bIsMoveTime)
+CMyHero::UpdateMotionState(INT nLoopTime, BOOL bIsMoveTime)
+     处理自己消息。
+ 
+CHero::UpdatePacketState()
+case SM_SITDOWN:
+         case SM_BUTCH:     
+         case SM_FEATURECHANGED:    
+         case SM_CHARSTATUSCHANGE: 
+         case SM_OPENHEALTH:            
+         case SM_CLOSEHEALTH:       
+         case SM_CHANGELIGHT:       
+         case SM_USERNAME:          
+         case SM_CHANGENAMECOLOR:   
+         case SM_HEALTHSPELLCHANGED:
+         case SM_RUSH:              
+         case SM_BACKSTEP:          
+         case SM_NOWDEATH:
+         case SM_DEATH:             
+         case SM_WALK:              
+         case SM_RUN:               
+         case SM_TURN:              
+         case SM_STRUCK:            
+         case SM_HIT:
+         case SM_FIREHIT:
+         case SM_LONGHIT:
+         case SM_POWERHIT:
+         case SM_WIDEHIT:           
+         case SM_MAGICFIRE:     
+     case SM_SPELL:     
+                            
+ CNPC::UpdatePacketState()
+     case SM_OPENHEALTH:            
+      case SM_CLOSEHEALTH:   
+      case SM_CHANGELIGHT:       
+      case SM_USERNAME:          
+      case SM_CHANGENAMECOLOR:   
+      case SM_HEALTHSPELLCHANGED:    
+      case SM_TURN:              
+      case SM_HIT:
+ 
+    CActor::UpdatePacketState()
+         case SM_DEATH:     SetMotionFrame(_MT_MON_DIE, bDir);
+         case SM_WALK:      SetMotionFrame(_MT_MON_WALK, bDir);
+case SM_TURN:      SetMotionFrame(_MT_MON_STAND, bDir);
+case SM_DIGUP:     SetMotionFrame(_MT_MON_APPEAR, bDir);
+case SM_DIGDOWN:   SetMotionFrame(_MT_MON_APPEAR, bDir);
+         case SM_FEATURECHANGED:        
+        case SM_OPENHEALTH:            
+         case SM_CLOSEHEALTH:       
+         case SM_CHANGELIGHT:       
+         case SM_CHANGENAMECOLOR:   
+         case SM_USERNAME:          
+         case SM_HEALTHSPELLCHANGED:    
+         case SM_BACKSTEP:      SetMotionFrame(_MT_MON_WALK, bDir);
+         case SM_STRUCK:            SetMotionFrame(_MT_MON_HITTED, m_bCurrDir);
+         case SM_HIT:           SetMotionFrame(_MT_MON_ATTACK_A, bDir);
+         case SM_FLYAXE:                
+         case SM_LIGHTING:          
+         case SM_SKELETON:
+ 
+     收到多个NPC，玩家发送的SM_TURN消息：由下面对象调用处理：
+CHero::OnTurn
+CNPC::OnTurn
+CActor::OnTurn
+ 
+根据服务器发送的消息，(创建一个虚拟玩家NPC，怪物，在客户端)，根据参数，初始化该对象设置(方向，坐标，名字，等级等)。在后面的处理中绘制该对象到UI界面中(移动对象的UI界面处理。)
+        
+        SetMotionFrame(_MT_MON_STAND, bDir); m_bCurrMtn := _MT_MON_STAND
+        m_dwFstFrame , m_dwEndFrame , m_wDelay 第一帧，最后一帧，延迟时间。
+ 
+   3.  AutoTargeting 自动搜索目标(NPC,怪物，玩家等)
+   
+   4． RenderObject补偿对象时间
+  
+   5.  RenderMapTileGrid
+       m_xMagicList，处理玩家魔法后，UI界面的处理。
+ 
+6.       m_xSnow, m_xRain, m_xFlyingTail, m_xSmoke, m_xLightFog设置场景UI界面处理。
+ 
+  7. m_xMyHero.ShowMessage(nLoopTime); 显示用户(UI处理)
+ m_xMyHero.DrawHPBar(); 显示用户HP值。
+  遍历m_xActorList，处理所有NPC的UI界面重绘
+   pxHero->ShowMessage(nLoopTime);
+ pxHero->DrawHPBar();
+ 
+ 8. DropItemShow下拉显示。
+ 
+9. 判断m_pxMouseTargetActor(玩家查看其它玩家，NPC，怪物时)
+   g_xClientSocket.SendQueryName向服务器提交查询信息。
+m_pxMouseOldTargetActor = m_pxMouseTargetActor; 保存该对象
+     m_pxMouseTargetActor->DrawName(); 重绘对象名字(UI界面显示)
+ 
+ 
+下面分析一下用户登录之后的流程：
+从前面的分析中可以看到，该用户玩家登录成功之后，得到了服务器发送来的各种消息。处理也比较复杂，同时有一定的优先级处理。并且根据用户登录后的XY坐标，向用户发送来了服务器XY坐标为中心附近单元格中的所有玩家(NPC,怪物)的SM_TURN消息。
+客户端根据数据包的标志，创建这些NPC，设置属性，并且把它们加入m_xActorList对列中。最后在UI界面上绘制这些对象。
+ 

@@ -1,0 +1,68 @@
+现在假设玩家开始操作游戏：
+传奇的客户端源代码工程WindHorn
+一、CWHApp派生CWHWindow和CWHDXGraphicWindow。
+二、CWHDefProcess派生出CloginProcess、CcharacterProcess、CgameProcess
+客户端WinMain调用CWHDXGraphicWindow g_xMainWnd;创建一个窗口。
+客户端CWHDXGraphicWindow在自己的Create函数中调用了CWHWindow的Create来创建窗口，然后再调用自己的CreateDXG()来初始化DirectX。
+ 
+消息循环：
+因此，当客户端鼠标单击的时候，先调用CWHWindow窗口的回调函数WndProc，即：    g_pWHApp->MainWndProc g_pWHApp定义为：static CWHApp* g_pWHApp = NULL；在CWHApp
+构造函数中赋值为：g_pWHApp = this; 
+g_pWHApp->MainWndProc便调用了CWHApp::MainWndProc，这是一个虚函数，实际上则是调用它的派生类CWHDXGraphicWindow::MainWndProc。
+   if ( m_pxDefProcess ) 
+       return m_pxDefProcess->DefMainWndProc(hWnd, uMsg, wParam, lParam); 
+根据g_xMainWnd.m_pxDefProcess和全局变量g_bProcState标记当前的处理状态。调用 
+     CLoginProcess->DefMainWndProc      
+CCharacterProcess->DefMainWndProc 
+CGameProcess->DefMainWndProc       
+ 
+当用户进行游戏之后，点击鼠标左键，来处理玩家走动的动作：
+客户端执行流程：(玩家走动)
+CGameProcess::OnLButtonDown(WPARAM wParam, LPARAM lParam)函数：该函数的处理流程：
+ 1． g_xClientSocket.SendNoticeOK();如果点中CnoticeBox则m_xNotice.OnButtonDown
+     if m_xMsgBtn.OnLButtonDown则调用g_xClientSocket.SendNoticeOK()方法，发送还CM_LOGINNOTICEOK消息。
+2．m_pxSavedTargetActor = NULL;设置为空。CInterface::OnLButtonDown函数会判断
+   鼠标点击的位置(CmirMsgBox, CscrlBar,CgameBtn，GetWindowInMousePos)
+     a. g_xClientSocket.SendItemIndex(CM_DROPITEM 丢弃物品)
+ 游戏服务器执行流程m_pxPlayerObject->Operate()调用
+          m_pUserInfo->UserDropGenItem    
+         m_pUserInfo->UserDropItem      删除普通物品。
+          SM_DROPITEM_SUCCESS             返回删除成功命令
+SM_DROPITEM_FAIL                返回删除失败命令
+ 
+     b. 遍历m_stMapItemList列表(存储玩家，怪物，NPC)， g_xClientSocket.SendPickUp 发送CM_PICKUP命令。
+         游戏服务器：m_pxPlayerObject->Operate()调用 PickUp(捡东西)消息处理：
+m_pMap->GetItem(m_nCurrX, m_nCurrY) 返回地图里的物体(草药,物品，金子等)
+         1．memcmp(pMapItem->szName, g_szGoldName 如果是黄金：
+                m_pMap->RemoveObject从地图中移走该的品。
+if (m_pUserInfo->IncGold(pMapItem->nCount))增加用户的金钱(向周转玩家发送RM_ITEMHIDE 消息，隐藏该物体，GoldChanged()，改变玩家的金钱。否则，把黄金返回地图中。
+2．m_pUserInfo->IsEnoughBag()
+                如果玩家的还可以随身带装备(空间)。m_pMap->RemoveObject从地图中移走该的品。UpdateItemToDB，更新用户信息到数据库。(向周转玩家发送RM_ITEMHIDE 消息，隐藏该物体，SendAddItem(lptItemRcd)向本玩家发送捡到东西的消息。m_pUserInfo->m_lpTItemRcd.AddNewNode并把该物品加入自己的列表中。
+ 
+     c. if m_pxMouseTargetActor g_xClientSocket.SendNPCClick发送CM_CLICKNPC命令。
+客户端RenderScene调用m_pxMouseTargetActor = NULL;
+CheckMappedData(nLoopTime, bIsMoveTime)处理，如果鼠标在某个移动对象的区域内就会设置 m_pxMouseTargetActor为该对象。
+            如果是NPC：
+if ( m_pxMouseTargetActor->m_stFeature.bGender == _GENDER_NPC ) 
+        g_xClientSocket.SendNPCClick(m_pxMouseTargetActor->m_dwIdentity);
+            CM_CLICKNPC消息：
+            否则：
+m_xMyHero.OnLButtonDown
+ 
+     d. 否则m_xMyHero.OnLButtonDown
+先判断m_xPacketQueue是否有数据，有则先处理。返回。
+判断m_pxMap->GetNextTileCanMove 根据坐标，判断地图上该点属性是否可以移动到该位置：
+        可移动时：
+           人：SetMotionState(_MT_WALK
+           骑马：SetMotionState(_MT_HORSEWALK
+        不可移动时：
+           人：SetMotionState(_MT_STAND, bDir);
+          骑马：SetMotionState(_MT_HORSESTAND, bDir);
+        SetMotionState函数：
+            判断循环遍历目标点的周围八个坐标，如果发现是一扇门，则向服务器发送打开这扇门的命令。g_xClientSocket.SendOpenDoor,否则则发送CM_WALK命令到服务器。
+            m_bMotionLock = m_bInputLock = TRUE; 设置游戏状态
+            m_wOldPosX = m_wPosX;                保存玩家X点
+            m_wOldPosY = m_wPosY;               保存玩家Y点
+            m_bOldDir = m_bCurrDir;             保存玩家方向
+然后调用SetMotionFrame设置m_bCurrMtn = _MT_WALK，方向等游戏状态。
+        设置m_bMoveSpeed = _SPEED_WALK（移动速度1）。m_pxMap->ScrollMap设置地图的偏移位置（m_shViewOffsetX, m_shViewOffsetY）。然后滚动地图，重绘玩家由CGameProcess::RenderScene CGameProcess::RenderObject->DrawActor重绘。

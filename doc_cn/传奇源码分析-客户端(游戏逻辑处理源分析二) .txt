@@ -1,0 +1,77 @@
+5．接受登录成功后，接收GameSrv服务器发送的消息:
+接收GameGate发送的消息：CClientSocket::OnSocketMessage的FD_READ事件中，PacketQ.PushQ((BYTE*)pszPacket);把接收到的消息，压入PacketQ队列中。处理PacketQ队列数据是由CGameProcess::Load()时调用OnTimer在CGameProcess::OnTimer中处理的，    
+处理过程为：
+OnMessageReceive; 
+ProcessPacket();
+  ProcessDefaultPacket();
+ 
+OnMessageReceive函数;  
+1.     判断是否收到心跳数据包，发送'*'，发送心跳数据包。
+2.     调用OnSocketMessageRecieve函数。这个函数里面详细处理了客户端的游戏执行逻辑。如果是‘+’开头（数据包）则调用OnProcPacketNotEncode处理这种类型数据包。否则得到_TDEFAULTMESSAGE数据包，进行游戏逻辑处理。
+OnProcPacketNotEncode说明：
+   收到GameSrv服务器的相应消息：
+     "GOOD"：可以执行动作。 m_bMotionLock为假。 
+     "FAIL"：不允许执行动作。人物被拉回移动前位置。
+     "LNG"： 
+     "ULNG"：
+     "WID"： 
+     "UWID"：
+     "FIR"： 
+     "UFIR"：
+     "PWR"： 
+3.     CGameProcess::OnSocketMessageRecieve(char *pszMsg)函数。处理游戏相关的消息。
+   SM_SENDNOTICE： 服务器提示信息：
+SM_NEWMAP: 用户登录后，服务器发送的初始化地图消息。
+SM_LOGON： 用户登录消息(服务器处理后返回结果)。用户登录成功后，在本地创建游戏对象，并发送消息，请求返回用户物品清单（魔法，等级，物品等）。
+SM_MAPDESCRIPTION: 得到服务器发送的地图的描述信息。
+SM_ABILITY：服务器发送的本玩家金钱，职业信息。
+SM_WINEXP： 
+SM_SUBABILITY : 服务器发送的玩家技能(魔法，杀伤力，速度，毒药，中毒恢复，生命恢复，符咒恢复)
+SM_ SM_SENDMYMAGIC: 用户魔法列表信息。
+SM_MAGIC_LVEXP: 魔法等级列表。
+    SM_BAGITEMS：用户物品清单 (玩家CM_QUERYBAGITEMS消息)
+SM_SENDUSEITEMS：用户装备清单
+SM_ADDITEM： 拣东西
+SM_DELITEM： 丢弃物品。
+等等。
+ 
+4.     部分数据未处理，加入m_xWaitPacketQueue队列中由ProcessPacket处理。
+ 
+    新登录游戏玩家：在OnSocketMessageRecieve函数中依次收到的消息为：
+1． GameSrv 服务器ProcessLogin线程返回GameGate服务器后返回的：
+   AddProcess(this, RM_LOGON, 0, 0, 0, 0, NULL);加入登录消息。
+SM_NEWMAP, SM_LOGON, SM_USERNAME, SM_MAPDESCRIPTION消息
+    AddProcess(this, RM_ABILITY, 0, 0, 0, 0, NULL); 等级
+      SM_ABILITY
+AddProcess(this, RM_SUBABILITY, 0, 0, 0, 0, NULL); 
+ SM_SUBABILITY
+AddProcess(this, RM_DAYCHANGING, 0, 0, 0, 0, NULL); 校时
+ SM_DAYCHANGING
+AddProcess(this, RM_SENDUSEITEMS, 0, 0, 0, 0, NULL); 装备
+ SM_SENDUSEITEMS
+AddProcess(this, RM_SENDMYMAGIC, 0, 0, 0, 0, NULL); 魔法
+     SM_SENDMYMAGIC
+     
+     客户端收到消息后相应的处理：
+SM_NEWMAP 接受地图消息 OnSvrMsgNewMap
+     初始化玩家坐标，m_xMyHero.m_wPosX = ptdm->wParam;
+                     m_xMyHero.m_wPosY = ptdm->wTag;
+加载地图文件    m_xMap.LoadMapData(szMapName);
+设置场景。 m_xLightFog.ChangeLightColor(dwFogColor);
+ 
+SM_LOGON 返回登录消息 OnSvrMsgLogon
+          m_xMyHero.Create初始化玩家信息（头发，武器，加载图片等），设置玩家
+地图m_xMyHero.SetMapHandler(&m_xMap)，创建用户魔法。加入m_xMagicList列表，pxMagic->CreateMagic, m_xMagicList.AddNode(pxMagic);并向服务器发送CM_QUERYBAGITEMS消息（用户物品清单，血，气，衣服，兵器等）。
+SM_USERNAME           获取玩家的游戏角色名字。
+SM_MAPDESCRIPTION     地图对应的名字。
+SM_BAGITEMS           用户物品清单 (玩家CM_QUERYBAGITEMS消息)
+SM_CHARSTATUSCHANGED   通知玩家状态改变消息（攻击力，状态）。
+SM_ABILITY       玩家金钱，职业
+SM_SUBABILITY    玩家技能(魔法，杀伤力，速度，毒药，中毒恢复，生命恢复，符
+咒恢复)
+SM_DAYCHANGING  返回游戏状态。（Day, Fog）让客户端随着服务器的时间，加载不同场景。
+SM_SENDUSEITEMS 用户装备清单
+SM_SENDMYMAGIC   用户魔法列表信息。
+ 
+总结：
+客户端连接到GameGate游戏网关服务器，并通过GameSrv服务器验证之后，就会收到GameSrv服务器发来的消息。主要是地图消息，登录消息，玩家的装备，技能，魔法，个人设置等等。GameSrv把地图分成若干块，把该玩家加入其中一块，并加入这一块的用户对象列表中，设置其状态为OS_MOVINGOBJECT。客户端加载地图，设置场景，设置自己的玩家状态（此时还没有怪物和其它玩家，所以玩家还需要接收其它游戏玩家和怪物的清单列表）。
